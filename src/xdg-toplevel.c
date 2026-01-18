@@ -56,6 +56,7 @@ typedef struct _PhocXdgToplevel {
   struct wl_listener         request_move;
   struct wl_listener         request_resize;
   struct wl_listener         request_maximize;
+  struct wl_listener         request_minimize;
   struct wl_listener         request_fullscreen;
   struct wl_listener         set_title;
   struct wl_listener         set_app_id;
@@ -242,6 +243,14 @@ set_maximized (PhocView *view, bool maximized)
 
   if (self->xdg_toplevel->base->initialized)
     wlr_xdg_toplevel_set_maximized (self->xdg_toplevel, maximized);
+}
+
+static void
+set_minimized (PhocView *view, bool minimized)
+{
+  PhocXdgToplevel *self = PHOC_XDG_TOPLEVEL (view);
+  // if (self->xdg_toplevel->base->initialized)
+  //   wlr_xdg_toplevel_set_maximized (self->xdg_toplevel);
 }
 
 
@@ -555,6 +564,18 @@ handle_request_maximize (struct wl_listener *listener, void *data)
     phoc_view_restore (PHOC_VIEW (self));
 }
 
+static void
+handle_request_minimize (struct wl_listener *listener, void *data)
+{
+  PhocXdgToplevel *self = wl_container_of (listener, self, request_minimize);
+  struct wlr_xdg_toplevel *xdg_toplevel = self->xdg_toplevel;
+
+  // if (xdg_toplevel->requested.minimized)
+  //   phoc_view_minimize (PHOC_VIEW (self), NULL);
+  // else
+  //   phoc_view_restore (PHOC_VIEW (self));
+}
+
 
 static void
 handle_request_fullscreen (struct wl_listener *listener, void *data)
@@ -647,6 +668,9 @@ phoc_xdg_toplevel_constructed (GObject *object)
   self->request_maximize.notify = handle_request_maximize;
   wl_signal_add (&self->xdg_toplevel->events.request_maximize, &self->request_maximize);
 
+  self->request_minimize.notify = handle_request_minimize;
+  wl_signal_add (&self->xdg_toplevel->events.request_minimize, &self->request_minimize);
+
   self->request_fullscreen.notify = handle_request_fullscreen;
   wl_signal_add (&self->xdg_toplevel->events.request_fullscreen, &self->request_fullscreen);
 
@@ -676,6 +700,7 @@ phoc_xdg_toplevel_finalize (GObject *object)
   wl_list_remove (&self->request_move.link);
   wl_list_remove (&self->request_resize.link);
   wl_list_remove (&self->request_maximize.link);
+  wl_list_remove (&self->request_minimize.link);
   wl_list_remove (&self->request_fullscreen.link);
   wl_list_remove (&self->set_title.link);
   wl_list_remove (&self->set_app_id.link);
@@ -703,6 +728,7 @@ phoc_xdg_toplevel_class_init (PhocXdgToplevelClass *klass)
   view_class->set_active = set_active;
   view_class->set_fullscreen = set_fullscreen;
   view_class->set_maximized = set_maximized;
+  view_class->set_maximized = set_minimized;
   view_class->set_tiled = set_tiled;
   view_class->set_suspended = set_suspended;
   view_class->close = _close;

@@ -171,6 +171,7 @@ void                  phoc_view_tile (PhocView             *view,
                                       PhocOutput           *output);
 PhocViewTileDirection phoc_view_get_tile_direction (PhocView *view);
 void                  phoc_view_maximize (PhocView *view, PhocOutput *output);
+void                  phoc_view_minimize (PhocView *view, PhocOutput *output);
 void                  phoc_view_restore (PhocView *view);
 void                  phoc_view_set_fullscreen (PhocView   *view,
                                                 bool        fullscreen,
@@ -210,6 +211,8 @@ gboolean              phoc_view_get_maximized_box (PhocView       *self,
                                                    PhocOutput     *output,
                                                    struct wlr_box *box);
 void                  phoc_view_set_visibility (PhocView *self, gboolean visibility);
+gboolean              phoc_view_get_visibility (PhocView *self);
+const char           *phoc_view_get_title      (PhocView *self);
 gboolean              phoc_view_get_tiled_box (PhocView             *self,
                                                PhocViewTileDirection dir,
                                                PhocOutput           *output,
