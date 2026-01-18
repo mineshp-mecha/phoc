@@ -77,6 +77,7 @@ typedef struct _PhocViewPrivate {
   /* wlr-toplevel-management handling */
   struct wlr_foreign_toplevel_handle_v1 *toplevel_handle;
   struct wl_listener toplevel_handle_request_maximize;
+  struct wl_listener toplevel_handle_request_minimize;
   struct wl_listener toplevel_handle_request_activate;
   struct wl_listener toplevel_handle_request_fullscreen;
   struct wl_listener toplevel_handle_request_close;
@@ -267,10 +268,24 @@ handle_toplevel_handle_request_maximize (struct wl_listener *listener,void *data
   PhocView *self = PHOC_VIEW_SELF (priv);
   struct wlr_foreign_toplevel_handle_v1_maximized_event *event = data;
 
+  g_debug ("========================================");
+  g_debug ("MAXIMIZED");
+  g_debug ("========================================");
+
   if (event->maximized)
     phoc_view_maximize (self, NULL);
   else
     phoc_view_restore (self);
+}
+
+static void
+handle_toplevel_handle_request_minimize (struct wl_listener *listener,void *data)
+{
+  PhocViewPrivate *priv = wl_container_of (listener, priv, toplevel_handle_request_minimize);
+  PhocView *self = PHOC_VIEW_SELF (priv);
+  struct wlr_foreign_toplevel_handle_v1_minimized_event *event = data;
+  phoc_view_activate(self, false);
+  phoc_view_minimize(self, NULL);
 }
 
 
@@ -331,6 +346,10 @@ view_create_foreign_toplevel_handle (PhocView *self)
   wl_signal_add(&priv->toplevel_handle->events.request_maximize,
                 &priv->toplevel_handle_request_maximize);
 
+  priv->toplevel_handle_request_minimize.notify = handle_toplevel_handle_request_minimize;
+  wl_signal_add(&priv->toplevel_handle->events.request_minimize,
+                &priv->toplevel_handle_request_minimize);
+
   priv->toplevel_handle_request_activate.notify = handle_toplevel_handle_request_activate;
   wl_signal_add(&priv->toplevel_handle->events.request_activate,
                 &priv->toplevel_handle_request_activate);
@@ -364,6 +383,7 @@ phoc_view_destroy_toplevel_handle (PhocView *self)
 
   priv->toplevel_handle->data = NULL;
   wl_list_remove (&priv->toplevel_handle_request_maximize.link);
+  wl_list_remove (&priv->toplevel_handle_request_minimize.link);
   wl_list_remove (&priv->toplevel_handle_request_activate.link);
   wl_list_remove (&priv->toplevel_handle_request_fullscreen.link);
   wl_list_remove (&priv->toplevel_handle_request_close.link);
@@ -568,6 +588,9 @@ on_suspend_timer_expired (gpointer user_data)
   g_assert (PHOC_IS_VIEW (self));
   priv = phoc_view_get_instance_private (self);
 
+  g_debug ("========================================");
+  g_debug ("View %p (%s): suspend timer expired", self, priv->title);
+  g_debug ("========================================");
   priv->suspend_timer_id = 0;
 
   PHOC_VIEW_GET_CLASS (self)->set_suspended (self, TRUE);
@@ -731,6 +754,28 @@ view_arrange_maximized (PhocView *self, PhocOutput *output)
   phoc_view_move_resize (self, box.x, box.y, box.width, box.height);
 }
 
+static void
+view_arrange_minimized (PhocView *self, PhocOutput *output)
+{
+  PhocViewPrivate *priv;
+  struct wlr_box box, geom;
+
+  g_assert (PHOC_IS_VIEW (self));
+  priv = phoc_view_get_instance_private (self);
+
+  if (!phoc_view_get_maximized_box (self, output, &box))
+    return;
+
+  // phoc_view_get_geometry (self, &geom);
+  // box.x -= geom.x / priv->scale;
+  // box.y -= geom.y / priv->scale;
+
+  box.y += box.height; // move it above the screen
+
+  phoc_view_move_resize (self, box.x, box.y, box.width, box.height);
+}
+
+
 
 /**
  * phoc_view_get_tiled_box:
@@ -839,6 +884,34 @@ phoc_view_maximize (PhocView *self, PhocOutput *output)
   g_object_notify_by_pspec (G_OBJECT (self), props[PROP_STATE]);
 
   view_arrange_maximized (self, output);
+}
+
+void
+phoc_view_minimize (PhocView *self, PhocOutput *output)
+{
+  PhocViewPrivate *priv;
+
+  g_assert (PHOC_IS_VIEW (self));
+  priv = phoc_view_get_instance_private (self);
+
+  // if (phoc_view_is_maximized (self) && phoc_view_get_output (self) == output)
+  //   return;
+
+  // if (phoc_view_is_fullscreen (self))
+  //   return;
+
+  PHOC_VIEW_GET_CLASS (self)->set_tiled (self, false);
+  PHOC_VIEW_GET_CLASS (self)->set_maximized (self, false);
+
+  if (priv->toplevel_handle)
+    wlr_foreign_toplevel_handle_v1_set_minimized(priv->toplevel_handle, true);
+
+  view_save (self);
+
+  // priv->state = PHOC_VIEW_STATE_MAXIMIZED;
+  // g_object_notify_by_pspec (G_OBJECT (self), props[PROP_STATE]);
+
+  view_arrange_minimized (self, output);
 }
 
 /**
@@ -1428,6 +1501,8 @@ phoc_view_setup (PhocView *view)
                                                  phoc_view_is_fullscreen (view));
   wlr_foreign_toplevel_handle_v1_set_maximized (priv->toplevel_handle,
                                                 phoc_view_is_maximized (view));
+  // wlr_foreign_toplevel_handle_v1_set_minimized (priv->toplevel_handle,
+  //                                               phoc_view_is_minimized (view));
   if (view->parent)
     toplevel_handle = phoc_view_get_toplevel_handle (view->parent);
 
@@ -2480,4 +2555,42 @@ phoc_view_set_visibility (PhocView *self, gboolean visibility)
   priv->visibility = visibility;
 
   phoc_view_set_suspended (self, !visibility);
+}
+
+/**
+ * phoc_view_get_visibility:
+ * @self: a view
+ *
+ * Whether a view is visible
+ *
+ * Returns: %TRUE if the view is marked as visible
+ */
+gboolean
+phoc_view_get_visibility (PhocView *self)
+{
+  PhocViewPrivate *priv;
+
+  g_assert (PHOC_IS_VIEW (self));
+  priv = phoc_view_get_instance_private (self);
+
+  return priv->visibility;
+}
+
+/**
+ * phoc_view_get_title:
+ * @self: a view
+ *
+ * Gets the view's title
+ *
+ * Returns: the view's title
+ */
+const char *
+phoc_view_get_title (PhocView *self)
+{
+  PhocViewPrivate *priv;
+
+  g_assert (PHOC_IS_VIEW (self));
+  priv = phoc_view_get_instance_private (self);
+
+  return priv->title;
 }
