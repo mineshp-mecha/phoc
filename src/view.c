@@ -268,9 +268,6 @@ handle_toplevel_handle_request_maximize (struct wl_listener *listener,void *data
   PhocView *self = PHOC_VIEW_SELF (priv);
   struct wlr_foreign_toplevel_handle_v1_maximized_event *event = data;
 
-  g_debug ("========================================");
-  g_debug ("MAXIMIZED");
-  g_debug ("========================================");
 
   if (event->maximized)
     phoc_view_maximize (self, NULL);
@@ -588,9 +585,6 @@ on_suspend_timer_expired (gpointer user_data)
   g_assert (PHOC_IS_VIEW (self));
   priv = phoc_view_get_instance_private (self);
 
-  g_debug ("========================================");
-  g_debug ("View %p (%s): suspend timer expired", self, priv->title);
-  g_debug ("========================================");
   priv->suspend_timer_id = 0;
 
   PHOC_VIEW_GET_CLASS (self)->set_suspended (self, TRUE);
